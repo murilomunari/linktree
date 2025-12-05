@@ -1,7 +1,17 @@
-import { useState } from "react"
+import { FormEvent, useState, useEffect } from "react"
 import { Header } from "../../components/header"
 import { Input } from "../../components/inputs"
 import { FiTrash } from "react-icons/fi";
+import { db } from "../../services/firebaseConnection";
+import { addDoc, collection, onSnapshot, orderBy, query, deleteDoc, doc } from "firebase/firestore";
+
+interface LinkProps {
+    id: string;
+    name: string;
+    url: string;
+    bg: string;
+    color: string;
+}
 
 export function Admin() {
     const [nameInputs, setNameInputs] = useState("");
@@ -9,14 +19,69 @@ export function Admin() {
     const [textColorInputs, setTextColorInputs] = useState("#f1f1f1");
     const [backgroundColorInputs, setBackgroundColorInputs] = useState("#121212");
 
+    const [links, setLinks] = useState<LinkProps[]>([])
 
+    useEffect(() => {
+        const linksRef = collection(db, "links");
+        const queryRef = query(linksRef, orderBy("created", "desc"));
+
+        const unsub = onSnapshot(queryRef, (snapshot) =>{
+            let lista = [] as LinkProps[];
+            snapshot.forEach((doc) => {
+                lista.push({
+                    id: doc.id,
+                    name: doc.data().name,
+                    url: doc.data().url,
+                    bg: doc.data().bg,
+                    color: doc.data().color,
+                })
+            })
+            setLinks(lista);
+        })
+
+        return () => {
+            unsub(); // para não ficar vizualizando toda hora
+        }
+        
+        
+    }, [])
+
+    function handleRegister(e: FormEvent) {
+        e.preventDefault();
+        
+        if(nameInputs === "" || urlInputs === ""){
+            alert("Preencha todos os campos");
+            return;
+        }
+
+        addDoc(collection(db, "links"), {
+            name: nameInputs,
+            url: urlInputs,
+            bg: backgroundColorInputs,
+            color: textColorInputs,
+            created: new Date()
+        })
+        .then(() => {
+            setNameInputs("");
+            setUrlInputs("");
+            console.log("SUCESSO AO CADASTRAR NO BANCO")
+        })
+        .catch((error) => {
+            console.log("ERRO AO CADASTRAR NO BANCO" + error)
+        })
+    }
+
+    async function handleDelete(id: string) {
+        const docRef = doc(db, "links", id);
+        await deleteDoc(docRef);
+    }
 
 
     return (
         <div className="flex items-center flex-col min-h-screen pb-7 px-2">
             <Header />
 
-            <form className="flex flex-col mt-8 mb-3 w-full max-w-xl">
+            <form className="flex flex-col mt-8 mb-3 w-full max-w-xl" onSubmit={handleRegister}>
                 <label className="text-white font-medium mt-2 mb-2">Nome do link</label>
                 <Input
                     placeholder="Digite o nome do link"
@@ -71,16 +136,19 @@ export function Admin() {
                 Meus links
             </h2>
 
-            <article
+            {links.map ((link) => (
+                <article
+                key={link.id}
                 className="flex items-center justify-between w-11/12 max-w-xl rounded py-3 px-2 mb- 2 select-none"
-                style={{ backgroundColor: "#2563EB", color: "#000" }}>
-                <p>teste</p>
+                style={{ backgroundColor: link.bg, color: link.color }}>
+                <p>{link.name}</p>
                 <div>
-                    <button className="border border-dashed p-1 rounde">
+                    <button className="border border-dashed p-1 rounde" onClick={() => handleDelete(link.id)}>
                         <FiTrash size={18} color="#FFF" />
                     </button>
                 </div>
             </article>
+            ))  }
         </div>
     )
 }
